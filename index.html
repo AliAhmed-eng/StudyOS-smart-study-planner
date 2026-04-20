@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>StudyOS — Smart Study Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- Background Orbs -->
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- TOP HEADER -->
+<header class="app-header">
+  <div class="header-left">
+    <div class="logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">Study<span class="logo-accent">OS</span></span>
+    </div>
+    <div class="live-clock" id="liveClock">00:00:00</div>
+  </div>
+  <div class="header-center">
+    <div class="streak-badge" id="streakBadge">
+      <span class="streak-fire">🔥</span>
+      <span id="streakCount">0</span> day streak
+      <span class="streak-best" id="streakBest"></span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="reward-progress-mini" id="rewardProgressMini">
+      <span class="rp-label">Next Reward:</span>
+      <div class="rp-pips">
+        <div class="rp-pip" id="pip0"></div>
+        <div class="rp-pip" id="pip1"></div>
+        <div class="rp-pip" id="pip2"></div>
+      </div>
+      <span id="rpText">0/3</span>
+    </div>
+    <button class="btn-icon" id="focusModeBtn" title="Focus Mode">◎</button>
+    <button id="themeToggle" class="theme-toggle" role="switch" aria-checked="false" aria-label="Switch to light mode" title="Toggle light/dark theme">
+      <span class="theme-toggle__track">
+        <span class="theme-toggle__icon theme-toggle__icon--moon" aria-hidden="true">🌙</span>
+        <span class="theme-toggle__icon theme-toggle__icon--sun"  aria-hidden="true">☀️</span>
+        <span class="theme-toggle__thumb"></span>
+      </span>
+    </button>
+    <button class="btn-icon" id="addTaskBtn" title="Add Task">＋</button>
+  </div>
+</header>
+
+<!-- DASHBOARD STATS -->
+<section class="stats-bar">
+  <div class="stat-card" id="statTotal">
+    <div class="stat-value" id="sTotal">0</div>
+    <div class="stat-label">Total Tasks</div>
+  </div>
+  <div class="stat-card running" id="statRunning">
+    <div class="stat-value" id="sRunning">0</div>
+    <div class="stat-label">Running</div>
+  </div>
+  <div class="stat-card completed" id="statCompleted">
+    <div class="stat-value" id="sCompleted">0</div>
+    <div class="stat-label">Completed</div>
+  </div>
+  <div class="stat-card pending" id="statPending">
+    <div class="stat-value" id="sPending">0</div>
+    <div class="stat-label">Pending</div>
+  </div>
+  <div class="stat-card productivity">
+    <div class="stat-value" id="sProductivity">0%</div>
+    <div class="stat-label">Productivity</div>
+  </div>
+  <div class="stat-card study-time">
+    <div class="stat-value" id="sStudyTime">0h 0m</div>
+    <div class="stat-label">Today's Study</div>
+  </div>
+  <div class="stat-card weekly">
+    <div class="stat-value" id="sWeeklyTime">0h 0m</div>
+    <div class="stat-label">This Week</div>
+  </div>
+</section>
+
+<!-- OVERALL PROGRESS BAR -->
+<div class="overall-progress-wrap">
+  <div class="overall-progress-label">
+    <span>Overall Progress</span>
+    <span id="overallPct">0%</span>
+  </div>
+  <div class="overall-progress-track">
+    <div class="overall-progress-fill" id="overallFill"></div>
+  </div>
+</div>
+
+<!-- DAILY QUOTE -->
+<div class="quote-bar" id="quoteBar">
+  <span class="quote-icon">✦</span>
+  <span id="quoteText">Loading quote...</span>
+</div>
+
+<!-- MAIN TABS -->
+<nav class="tabs-nav">
+  <button class="tab-btn active" data-tab="all">All Tasks</button>
+  <button class="tab-btn" data-tab="running">
+    Running <span class="tab-badge" id="badgeRunning">0</span>
+  </button>
+  <button class="tab-btn" data-tab="pending">
+    Pending <span class="tab-badge" id="badgePending">0</span>
+  </button>
+  <button class="tab-btn" data-tab="completed">Completed</button>
+  <button class="tab-btn" data-tab="badges">🏅 Badges</button>
+</nav>
+
+<!-- TASK LISTS -->
+<main class="main-content">
+  <div class="tab-panel active" id="tab-all">
+    <div class="empty-state" id="emptyAll">
+      <div class="empty-icon">📚</div>
+      <div class="empty-title">No tasks yet</div>
+      <div class="empty-sub">Click ＋ to add your first study task</div>
+    </div>
+    <div class="task-grid" id="taskListAll"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-running">
+    <div class="empty-state" id="emptyRunning">
+      <div class="empty-icon">⏳</div>
+      <div class="empty-title">No running tasks</div>
+      <div class="empty-sub">Start a task to see it here</div>
+    </div>
+    <div class="task-grid" id="taskListRunning"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-pending">
+    <div class="empty-state" id="emptyPending">
+      <div class="empty-icon">⏸️</div>
+      <div class="empty-title">No pending tasks</div>
+      <div class="empty-sub">Great work — nothing overdue!</div>
+    </div>
+    <div class="task-grid" id="taskListPending"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-completed">
+    <div class="empty-state" id="emptyCompleted">
+      <div class="empty-icon">✅</div>
+      <div class="empty-title">No completed tasks</div>
+      <div class="empty-sub">Finish tasks to see them here</div>
+    </div>
+    <div class="task-grid" id="taskListCompleted"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-badges">
+    <div class="badges-grid" id="badgesGrid"></div>
+  </div>
+</main>
+
+<!-- ===== MODALS ===== -->
+
+<!-- ADD TASK MODAL -->
+<div class="modal-overlay" id="addTaskModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>New Study Task</h2>
+      <button class="modal-close" id="closeAddModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Task Title</label>
+        <input type="text" id="taskTitle" placeholder="e.g. Chapter 5 Review" autocomplete="off"/>
+      </div>
+      <div class="form-group">
+        <label>Subject / Topic</label>
+        <input type="text" id="taskSubject" placeholder="e.g. Mathematics" autocomplete="off"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Start Time</label>
+          <input type="time" id="taskStart"/>
+        </div>
+        <div class="form-group">
+          <label>Finish Time</label>
+          <input type="time" id="taskFinish"/>
+        </div>
+      </div>
+      <div class="duration-preview" id="durationPreview">
+        <span class="dp-icon">⏱</span>
+        <span id="dpText">Select start &amp; finish time</span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelAddModal">Cancel</button>
+        <button class="btn-primary" id="confirmAddTask">Add Task →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TASK DONE MODAL (timer auto-expired) -->
+<div class="modal-overlay" id="taskDoneModal">
+  <div class="modal-box modal-center">
+    <div class="modal-icon">⏰</div>
+    <h2 id="doneModalTitle">Time's Up!</h2>
+    <p id="doneModalMsg">Did you complete this task?</p>
+    <div class="modal-actions-center">
+      <button class="btn-success" id="doneYes">✓ Yes, Completed!</button>
+      <button class="btn-danger" id="doneNo">✗ No, Mark Pending</button>
+    </div>
+  </div>
+</div>
+
+<!-- EARLY COMPLETE MODAL -->
+<div class="modal-overlay" id="earlyCompleteModal">
+  <div class="modal-box modal-center">
+    <div class="modal-icon">🎯</div>
+    <h2>Excellent!</h2>
+    <p id="earlyCompleteMsg">You finished early!</p>
+    <button class="btn-primary" id="closeEarlyModal">Awesome! →</button>
+  </div>
+</div>
+
+<!-- PENDING COMPLETE MODAL -->
+<div class="modal-overlay" id="pendingCompleteModal">
+  <div class="modal-box modal-center">
+    <div class="modal-icon">📋</div>
+    <h2>Completing Delayed Task</h2>
+    <p id="pendingCompleteMsg">You delayed this task.</p>
+    <div class="modal-actions-center">
+      <button class="btn-success" id="pendingYes">Mark Complete</button>
+      <button class="btn-ghost" id="pendingCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION COMPLETE ALERT (auto-timer end) -->
+<div class="modal-overlay" id="sessionCompleteModal">
+  <div class="modal-box modal-center">
+    <div class="modal-icon">🔔</div>
+    <h2>Session Completed!</h2>
+    <p id="sessionCompleteMsg">Your study session has ended.</p>
+    <div class="modal-actions-center">
+      <button class="btn-success" id="sessionCompleteOk">Got it!</button>
+    </div>
+  </div>
+</div>
+
+<!-- REWARD UNLOCK MODAL -->
+<div class="modal-overlay" id="rewardModal">
+  <div class="modal-box modal-center reward-modal">
+    <div class="reward-confetti" id="confetti"></div>
+    <div class="modal-icon">🎮</div>
+    <h2>Reward Unlocked!</h2>
+    <p>You completed 3 tasks! Enjoy a 1-minute refresh break.</p>
+    <div class="modal-actions-center">
+      <button class="btn-reward" id="playGameBtn">🕹 Play Now</button>
+      <button class="btn-ghost" id="skipGameBtn">Maybe Later</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME MODAL -->
+<div class="modal-overlay" id="gameModal">
+  <div class="modal-box game-box">
+    <div class="game-header">
+      <div class="game-title">⚡ Reaction Tap Game</div>
+      <div class="game-timer-wrap">
+        <span>Time: </span><span id="gameTimerDisplay">60</span>s
+      </div>
+    </div>
+    <div class="game-score-wrap">
+      Score: <span id="gameScore">0</span> | Best: <span id="gameBest">0</span>
+    </div>
+    <div class="game-arena" id="gameArena">
+      <div class="game-start-msg" id="gameStartMsg">
+        <div class="game-start-icon">🎯</div>
+        <div>Tap the glowing dots as fast as you can!</div>
+        <button class="btn-reward" id="startGameBtn">Start!</button>
+      </div>
+    </div>
+    <div class="game-result" id="gameResult" style="display:none">
+      <div class="gr-icon">🏆</div>
+      <div id="grMsg">Great job!</div>
+      <div id="grScore"></div>
+      <button class="btn-primary" id="closeGameBtn">Back to Study →</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOCUS MODE OVERLAY -->
+<div class="focus-overlay" id="focusOverlay" style="display:none">
+  <div class="focus-content">
+    <div class="focus-badge">FOCUS MODE</div>
+    <div class="focus-task-title" id="focusTitle">No active task</div>
+    <div class="focus-subject" id="focusSubject"></div>
+    <div class="focus-timer" id="focusTimer">--:--:--</div>
+    <div class="focus-progress-wrap">
+      <div class="focus-progress-fill" id="focusProgressFill"></div>
+    </div>
+    <button class="btn-ghost focus-exit" id="focusExitBtn">✕ Exit Focus Mode</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
