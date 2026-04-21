@@ -2,11 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+
+  <!-- ===== PWA Meta Tags ===== -->
   <title>StudyOS — Smart Study Planner</title>
+  <meta name="description" content="A gamified smart study planner with timers, streaks, badges, focus mode, and offline support."/>
+  <meta name="application-name" content="StudyOS"/>
+  <meta name="theme-color" content="#00ffb2" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#00a87a" media="(prefers-color-scheme: light)"/>
+
+  <!-- Apple PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="StudyOS"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png"/>
+
+  <!-- Microsoft Tiles -->
+  <meta name="msapplication-TileImage" content="icons/icon-144.png"/>
+  <meta name="msapplication-TileColor" content="#080b14"/>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="96x96"  href="icons/icon-96.png"/>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json"/>
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -44,6 +71,8 @@
       </div>
       <span id="rpText">0/3</span>
     </div>
+    <!-- Offline indicator -->
+    <div class="offline-badge" id="offlineBadge" title="You are offline — data saved locally">📡 Offline</div>
     <button class="btn-icon" id="focusModeBtn" title="Focus Mode">◎</button>
     <button id="themeToggle" class="theme-toggle" role="switch" aria-checked="false" aria-label="Switch to light mode" title="Toggle light/dark theme">
       <span class="theme-toggle__track">
@@ -103,6 +132,13 @@
 <div class="quote-bar" id="quoteBar">
   <span class="quote-icon">✦</span>
   <span id="quoteText">Loading quote...</span>
+</div>
+
+<!-- INSTALL BANNER (hidden by default, shown by JS) -->
+<div class="install-banner" id="installBanner" style="display:none">
+  <span class="install-banner-text">📲 Install StudyOS as an app for the best experience!</span>
+  <button class="btn-install" id="installBtn">Install</button>
+  <button class="btn-install-dismiss" id="installDismiss">✕</button>
 </div>
 
 <!-- MAIN TABS -->
@@ -168,24 +204,24 @@
   <div class="modal-box">
     <div class="modal-header">
       <h2>New Study Task</h2>
-      <button class="modal-close" id="closeAddModal">✕</button>
+      <button class="modal-close" id="closeAddModal" aria-label="Close">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label>Task Title</label>
-        <input type="text" id="taskTitle" placeholder="e.g. Chapter 5 Review" autocomplete="off"/>
+        <label for="taskTitle">Task Title</label>
+        <input type="text" id="taskTitle" placeholder="e.g. Chapter 5 Review" autocomplete="off" autocapitalize="words"/>
       </div>
       <div class="form-group">
-        <label>Subject / Topic</label>
-        <input type="text" id="taskSubject" placeholder="e.g. Mathematics" autocomplete="off"/>
+        <label for="taskSubject">Subject / Topic</label>
+        <input type="text" id="taskSubject" placeholder="e.g. Mathematics" autocomplete="off" autocapitalize="words"/>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Start Time</label>
+          <label for="taskStart">Start Time</label>
           <input type="time" id="taskStart"/>
         </div>
         <div class="form-group">
-          <label>Finish Time</label>
+          <label for="taskFinish">Finish Time</label>
           <input type="time" id="taskFinish"/>
         </div>
       </div>
@@ -201,7 +237,7 @@
   </div>
 </div>
 
-<!-- TASK DONE MODAL (timer auto-expired) -->
+<!-- TASK DONE MODAL -->
 <div class="modal-overlay" id="taskDoneModal">
   <div class="modal-box modal-center">
     <div class="modal-icon">⏰</div>
@@ -209,7 +245,7 @@
     <p id="doneModalMsg">Did you complete this task?</p>
     <div class="modal-actions-center">
       <button class="btn-success" id="doneYes">✓ Yes, Completed!</button>
-      <button class="btn-danger" id="doneNo">✗ No, Mark Pending</button>
+      <button class="btn-danger"  id="doneNo">✗ No, Mark Pending</button>
     </div>
   </div>
 </div>
@@ -232,12 +268,12 @@
     <p id="pendingCompleteMsg">You delayed this task.</p>
     <div class="modal-actions-center">
       <button class="btn-success" id="pendingYes">Mark Complete</button>
-      <button class="btn-ghost" id="pendingCancel">Cancel</button>
+      <button class="btn-ghost"   id="pendingCancel">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- SESSION COMPLETE ALERT (auto-timer end) -->
+<!-- SESSION COMPLETE ALERT -->
 <div class="modal-overlay" id="sessionCompleteModal">
   <div class="modal-box modal-center">
     <div class="modal-icon">🔔</div>
@@ -258,7 +294,7 @@
     <p>You completed 3 tasks! Enjoy a 1-minute refresh break.</p>
     <div class="modal-actions-center">
       <button class="btn-reward" id="playGameBtn">🕹 Play Now</button>
-      <button class="btn-ghost" id="skipGameBtn">Maybe Later</button>
+      <button class="btn-ghost"  id="skipGameBtn">Maybe Later</button>
     </div>
   </div>
 </div>
@@ -296,8 +332,8 @@
   <div class="focus-content">
     <div class="focus-badge">FOCUS MODE</div>
     <div class="focus-task-title" id="focusTitle">No active task</div>
-    <div class="focus-subject" id="focusSubject"></div>
-    <div class="focus-timer" id="focusTimer">--:--:--</div>
+    <div class="focus-subject"   id="focusSubject"></div>
+    <div class="focus-timer"     id="focusTimer">--:--:--</div>
     <div class="focus-progress-wrap">
       <div class="focus-progress-fill" id="focusProgressFill"></div>
     </div>
