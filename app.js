@@ -160,7 +160,7 @@ function registerServiceWorker() {
 
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
+      .register('./sw.js', { scope: './' })
       .then(reg => {
         console.log('[StudyOS] SW registered, scope:', reg.scope);
 

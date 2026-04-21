@@ -1,91 +1,100 @@
 /* ============================================================
-   StudyOS — sw.js  |  Service Worker
-   Strategy: Cache-First for static assets, Network-First for API,
-   Offline fallback for navigation.
+   StudyOS — sw.js  |  Service Worker  (GitHub Pages Edition)
+
+   Uses RELATIVE paths so the app works on any host/subdirectory:
+     - GitHub Pages:  https://username.github.io/repo-name/
+     - Custom domain: https://yourdomain.com/
+     - localhost:     http://localhost:5500/
+
+   Caching strategy:
+     Static assets  → Cache-First  (instant loads)
+     Google Fonts   → Cache-First  (cached at runtime)
+     Navigation     → Network-first, offline.html fallback
    ============================================================ */
 
 'use strict';
 
-const CACHE_NAME    = 'studyos-v2';
-const OFFLINE_URL   = '/offline.html';
+const CACHE_VERSION  = 'studyos-v3';
+const OFFLINE_PAGE   = 'offline.html';
 
-// All static assets to pre-cache on install
-const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json',
-  '/offline.html',
-  // Google Fonts (cached at runtime via network-first)
+// Assets to pre-cache on install (relative paths work on any host)
+const PRECACHE = [
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './manifest.json',
+  './offline.html',
 ];
 
-// ---- INSTALL: pre-cache shell ----
+// ── INSTALL ──────────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_VERSION)
+      .then(cache => cache.addAll(PRECACHE))
+      .then(() => self.skipWaiting())  // activate immediately
+      .catch(err => console.warn('[SW] Pre-cache failed:', err))
   );
 });
 
-// ---- ACTIVATE: clean up old caches ----
+// ── ACTIVATE ─────────────────────────────────────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
         keys
-          .filter(key => key !== CACHE_NAME)
+          .filter(key => key !== CACHE_VERSION)
           .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
   );
 });
 
-// ---- FETCH: routing strategy ----
+// ── FETCH ────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET, chrome-extension, and analytics requests
+  // Ignore non-GET and browser extension requests
+  if (request.method !== 'GET' || url.protocol === 'chrome-extension:') return;
+
+  // Ignore analytics / tracking
   if (
-    request.method !== 'GET' ||
-    url.protocol === 'chrome-extension:' ||
     url.hostname.includes('google-analytics') ||
-    url.hostname.includes('googletagmanager')
-  ) {
-    return;
-  }
+    url.hostname.includes('googletagmanager') ||
+    url.hostname.includes('doubleclick')
+  ) return;
 
-  // API / tasks endpoint → Network-first, fallback to empty array
-  if (url.pathname.startsWith('/tasks')) {
-    event.respondWith(networkFirst(request));
-    return;
-  }
-
-  // Google Fonts → Cache-first (runtime)
-  if (
-    url.hostname === 'fonts.googleapis.com' ||
-    url.hostname === 'fonts.gstatic.com'
-  ) {
+  // Google Fonts → cache at runtime, serve from cache next time
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     event.respondWith(cacheFirst(request));
     return;
   }
 
-  // Navigation (HTML pages) → Network-first, offline fallback
+  // HTML navigation → network-first with offline fallback
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .catch(() => caches.match(OFFLINE_URL) || caches.match('/index.html'))
+        .then(res => {
+          // Also update cache with fresh copy
+          const clone = res.clone();
+          caches.open(CACHE_VERSION).then(c => c.put(request, clone));
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          return caches.match(OFFLINE_PAGE);
+        })
     );
     return;
   }
 
-  // Static assets (CSS, JS, images) → Cache-first
+  // Everything else (CSS, JS, images) → cache-first
   event.respondWith(cacheFirst(request));
 });
 
-// ---- Strategies ----
+// ── CACHE STRATEGIES ─────────────────────────────────────────
 
 async function cacheFirst(request) {
   const cached = await caches.match(request);
@@ -93,66 +102,44 @@ async function cacheFirst(request) {
 
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
+    if (response && response.ok) {
+      const cache = await caches.open(CACHE_VERSION);
+      // Don't cache opaque cross-origin responses blindly
+      if (response.type !== 'opaque') {
+        cache.put(request, response.clone());
+      }
     }
     return response;
   } catch {
-    return new Response('Offline', { status: 503 });
-  }
-}
-
-async function networkFirst(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    return cached || new Response(JSON.stringify([]), {
-      headers: { 'Content-Type': 'application/json' }
+    // Return offline page as last resort for navigations
+    return new Response('Offline', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain' }
     });
   }
 }
 
-// ---- Background Sync: queue failed API mutations ----
-self.addEventListener('sync', event => {
-  if (event.tag === 'studyos-sync') {
-    event.waitUntil(syncPendingRequests());
-  }
-});
-
-async function syncPendingRequests() {
-  // Placeholder: in a real app you'd read from IndexedDB queue
-  // and replay failed POST/PUT/DELETE requests here
-  console.log('[SW] Background sync triggered');
-}
-
-// ---- Push Notifications ----
+// ── PUSH NOTIFICATIONS ───────────────────────────────────────
 self.addEventListener('push', event => {
-  const data = event.data ? event.data.json() : {};
+  const data    = event.data ? event.data.json() : {};
   const title   = data.title || 'StudyOS';
   const options = {
-    body:    data.body || 'You have a study reminder!',
-    icon:    '/icons/icon-192.png',
-    badge:   '/icons/icon-96.png',
+    body:    data.body    || 'You have a study reminder!',
+    icon:    './icons/icon-192.png',
+    badge:   './icons/icon-96.png',
     vibrate: [200, 100, 200],
-    data:    { url: data.url || '/' },
+    data:    { url: data.url || './' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
+  const url = event.notification.data?.url || './';
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url === url && 'focus' in client) return client.focus();
+    clients.matchAll({ type: 'window' }).then(list => {
+      for (const c of list) {
+        if (c.url === url && 'focus' in c) return c.focus();
       }
       if (clients.openWindow) return clients.openWindow(url);
     })
