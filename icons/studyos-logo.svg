@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+
+    <!-- Rounded-square clip so everything stays inside the icon shape -->
+    <clipPath id="iconClip">
+      <rect width="512" height="512" rx="115" ry="115"/>
+    </clipPath>
+
+    <!-- Background radial glow -->
+    <radialGradient id="bgGlow" cx="50%" cy="42%" r="62%">
+      <stop offset="0%"   stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0a0a1a"/>
+    </radialGradient>
+
+    <!-- Main "S" stroke gradient — indigo → cyan → purple -->
+    <linearGradient id="strokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#6366F1"/>
+      <stop offset="48%"  stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+
+    <!-- Accent dot gradient -->
+    <radialGradient id="dotGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Glow filter for the "S" shape -->
+    <filter id="glowFilter" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Softer outer glow for the S -->
+    <filter id="outerGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="18" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="115" ry="115" fill="url(#bgGlow)"/>
+
+  <!-- Subtle grid lines (depth effect) -->
+  <g clip-path="url(#iconClip)" opacity="0.06">
+    <line x1="0" y1="128" x2="512" y2="128" stroke="#6366F1" stroke-width="1"/>
+    <line x1="0" y1="256" x2="512" y2="256" stroke="#6366F1" stroke-width="1"/>
+    <line x1="0" y1="384" x2="512" y2="384" stroke="#6366F1" stroke-width="1"/>
+    <line x1="128" y1="0" x2="128" y2="512" stroke="#6366F1" stroke-width="1"/>
+    <line x1="256" y1="0" x2="256" y2="512" stroke="#6366F1" stroke-width="1"/>
+    <line x1="384" y1="0" x2="384" y2="512" stroke="#6366F1" stroke-width="1"/>
+  </g>
+
+  <!-- Background glow blob -->
+  <ellipse cx="256" cy="240" rx="170" ry="155" fill="#6366F1" opacity="0.08" filter="url(#outerGlow)"/>
+
+  <!-- ===== THE "S" MARK =====
+       Built from two arc segments that form a flowing, continuous S-curve.
+       Upper arc:  sweeps top-right → center-left
+       Lower arc:  sweeps center-right → bottom-left
+       Connected at the midpoint to make a single fluid shape.
+  -->
+
+  <!-- Outer glow layer (blurred, same path, wider stroke) -->
+  <path
+    d="
+      M 188 168
+      C 188 135, 215 112, 256 112
+      C 297 112, 338 135, 338 175
+      C 338 215, 297 235, 256 248
+      C 215 261, 174 281, 174 321
+      C 174 361, 215 400, 256 400
+      C 297 400, 324 377, 324 344
+    "
+    fill="none"
+    stroke="url(#strokeGrad)"
+    stroke-width="62"
+    stroke-linecap="round"
+    opacity="0.18"
+    filter="url(#outerGlow)"
+  />
+
+  <!-- Main "S" stroke -->
+  <path
+    d="
+      M 188 168
+      C 188 135, 215 112, 256 112
+      C 297 112, 338 135, 338 175
+      C 338 215, 297 235, 256 248
+      C 215 261, 174 281, 174 321
+      C 174 361, 215 400, 256 400
+      C 297 400, 324 377, 324 344
+    "
+    fill="none"
+    stroke="url(#strokeGrad)"
+    stroke-width="48"
+    stroke-linecap="round"
+    filter="url(#glowFilter)"
+  />
+
+  <!-- Inner highlight — thinner, lighter to simulate 3-D tube -->
+  <path
+    d="
+      M 188 168
+      C 188 135, 215 112, 256 112
+      C 297 112, 338 135, 338 175
+      C 338 215, 297 235, 256 248
+      C 215 261, 174 281, 174 321
+      C 174 361, 215 400, 256 400
+      C 297 400, 324 377, 324 344
+    "
+    fill="none"
+    stroke="white"
+    stroke-width="12"
+    stroke-linecap="round"
+    opacity="0.22"
+  />
+
+  <!-- Accent dot at top terminal -->
+  <circle cx="188" cy="168" r="22" fill="url(#dotGrad)" opacity="0.90"/>
+  <circle cx="188" cy="168" r="11" fill="#22D3EE" opacity="0.95"/>
+
+  <!-- Accent dot at bottom terminal -->
+  <circle cx="324" cy="344" r="22" fill="url(#dotGrad)" opacity="0.90"/>
+  <circle cx="324" cy="344" r="11" fill="#A78BFA" opacity="0.95"/>
+
+  <!-- Subtle corner spark — top right -->
+  <circle cx="392" cy="96" r="5" fill="#22D3EE" opacity="0.55"/>
+  <circle cx="408" cy="80" r="3" fill="#A78BFA" opacity="0.45"/>
+  <circle cx="424" cy="112" r="2" fill="#6366F1" opacity="0.40"/>
+
+  <!-- Subtle corner spark — bottom left -->
+  <circle cx="104" cy="432" r="4" fill="#A78BFA" opacity="0.50"/>
+  <circle cx="88"  cy="416" r="2.5" fill="#22D3EE" opacity="0.40"/>
+
+</svg>

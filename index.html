@@ -8,23 +8,26 @@
   <title>StudyOS — Smart Study Planner</title>
   <meta name="description" content="A gamified smart study planner with timers, streaks, badges, focus mode, and offline support."/>
   <meta name="application-name" content="StudyOS"/>
-  <meta name="theme-color" content="#00ffb2" media="(prefers-color-scheme: dark)"/>
-  <meta name="theme-color" content="#00a87a" media="(prefers-color-scheme: light)"/>
+  <meta name="theme-color" content="#6366F1" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#4F46E5" media="(prefers-color-scheme: light)"/>
 
   <!-- Apple PWA -->
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="StudyOS"/>
-  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <link rel="apple-touch-icon"             href="icons/icon-192.png"/>
   <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png"/>
+  <link rel="apple-touch-icon" sizes="128x128" href="icons/icon-128.png"/>
 
   <!-- Microsoft Tiles -->
   <meta name="msapplication-TileImage" content="icons/icon-144.png"/>
-  <meta name="msapplication-TileColor" content="#080b14"/>
+  <meta name="msapplication-TileColor" content="#0a0a1a"/>
 
-  <!-- Favicon -->
+  <!-- Favicon — all sizes for browser tabs, bookmarks, taskbar -->
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png"/>
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
-  <link rel="icon" type="image/png" sizes="96x96"  href="icons/icon-96.png"/>
+  <link rel="icon" type="image/png" sizes="96x96"   href="icons/icon-96.png"/>
+  <link rel="icon" type="image/png" sizes="48x48"   href="icons/icon-48.png"/>
 
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json"/>
@@ -49,7 +52,22 @@
 <header class="app-header">
   <div class="header-left">
     <div class="logo">
-      <span class="logo-icon">⬡</span>
+      <span class="logo-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+          <defs>
+            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stop-color="#6366F1"/>
+              <stop offset="50%"  stop-color="#22D3EE"/>
+              <stop offset="100%" stop-color="#A78BFA"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="7" fill="#0a0a1a"/>
+          <path d="M11.5 10.5 C11.5 8.5,13,7,16,7 C19,7,21,8.5,21,11 C21,13.5,19,14.5,16,15.5 C13,16.5,11,17.5,11,20 C11,22.5,13,24.5,16,24.5 C19,24.5,20.5,23,20.5,21"
+                fill="none" stroke="url(#logoGrad)" stroke-width="2.8" stroke-linecap="round"/>
+          <circle cx="11.5" cy="10.5" r="1.5" fill="#22D3EE"/>
+          <circle cx="20.5" cy="21"   r="1.5" fill="#A78BFA"/>
+        </svg>
+      </span>
       <span class="logo-text">Study<span class="logo-accent">OS</span></span>
     </div>
     <div class="live-clock" id="liveClock">00:00:00</div>
@@ -338,6 +356,19 @@
       <div class="focus-progress-fill" id="focusProgressFill"></div>
     </div>
     <button class="btn-ghost focus-exit" id="focusExitBtn">✕ Exit Focus Mode</button>
+  </div>
+</div>
+
+<!-- ===== UPDATE POPUP ===== -->
+<div class="update-popup" id="updatePopup" role="alert" aria-live="polite">
+  <div class="update-popup__inner">
+    <div class="update-popup__icon">🚀</div>
+    <div class="update-popup__text">
+      <strong>New version available</strong>
+      <span>Reload to get the latest features</span>
+    </div>
+    <button class="update-popup__btn" onclick="applyUpdate()">Update Now</button>
+    <button class="update-popup__dismiss" onclick="dismissUpdatePopup()" aria-label="Dismiss">✕</button>
   </div>
 </div>
 

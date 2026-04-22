@@ -155,6 +155,9 @@ function weekStr() {
 // ============================================================
 // 5. PWA — SERVICE WORKER REGISTRATION
 // ============================================================
+// Holds reference to the waiting SW so we can message it on demand
+let _waitingSW = null;
+
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
@@ -164,34 +167,67 @@ function registerServiceWorker() {
       .then(reg => {
         console.log('[StudyOS] SW registered, scope:', reg.scope);
 
-        // Check for updates every time the page loads
+        // Poll for updates on every page load
         reg.update();
 
-        // Notify user when a new version is available
+        // Called whenever a new SW starts installing
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           if (!newWorker) return;
+
           newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              showUpdateToast();
+            // Only show popup when:
+            // 1. New worker finished installing (state === 'installed')
+            // 2. An existing SW is already controlling the page
+            //    (i.e. this is an UPDATE not the very first install)
+            if (
+              newWorker.state === 'installed' &&
+              navigator.serviceWorker.controller
+            ) {
+              _waitingSW = newWorker;
+              showUpdatePopup();
             }
           });
         });
+
+        // If there's already a waiting worker on load (user reopened tab)
+        // show the popup immediately without waiting for updatefound
+        if (reg.waiting && navigator.serviceWorker.controller) {
+          _waitingSW = reg.waiting;
+          showUpdatePopup();
+        }
       })
       .catch(err => console.warn('[StudyOS] SW registration failed:', err));
+
+    // When the SW sends RELOAD (after skipWaiting completes), refresh the page
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
   });
 }
 
-function showUpdateToast() {
-  const toast = document.createElement('div');
-  toast.className = 'update-toast';
-  toast.innerHTML = `
-    <span>🆕 New version available!</span>
-    <button onclick="location.reload()">Refresh</button>
-  `;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.classList.add('visible'), 100);
-  setTimeout(() => toast.remove(), 10000);
+// Show the static update popup (defined in index.html)
+function showUpdatePopup() {
+  const popup = $('updatePopup');
+  if (!popup) return;
+  popup.classList.add('visible');
+}
+
+// Hide the popup (called by dismiss button)
+function dismissUpdatePopup() {
+  const popup = $('updatePopup');
+  if (popup) popup.classList.remove('visible');
+}
+
+// Trigger the update: tell waiting SW to skip waiting, then
+// controllerchange fires → page reloads with new version
+function applyUpdate() {
+  if (_waitingSW) {
+    _waitingSW.postMessage({ type: 'SKIP_WAITING' });
+  } else {
+    // Fallback: just reload, browser will activate waiting SW
+    window.location.reload();
+  }
 }
 
 // ============================================================
@@ -1416,6 +1452,8 @@ window.completePendingTask = completePendingTask;
 window.restartTask         = restartTask;
 window.deleteTask          = deleteTask;
 window.startGame           = startGame;
+window.applyUpdate         = applyUpdate;
+window.dismissUpdatePopup  = dismissUpdatePopup;
 
 // ============================================================
 // 42. MAIN INIT

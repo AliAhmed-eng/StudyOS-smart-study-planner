@@ -14,7 +14,7 @@
 
 'use strict';
 
-const CACHE_VERSION  = 'studyos-v3';
+const CACHE_VERSION  = 'studyos-v4';
 const OFFLINE_PAGE   = 'offline.html';
 
 // Assets to pre-cache on install (relative paths work on any host)
@@ -118,6 +118,14 @@ async function cacheFirst(request) {
     });
   }
 }
+
+// ── MESSAGE: skip waiting & activate new SW immediately ──────
+// app.js sends { type: 'SKIP_WAITING' } when the user clicks "Update Now"
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 // ── PUSH NOTIFICATIONS ───────────────────────────────────────
 self.addEventListener('push', event => {

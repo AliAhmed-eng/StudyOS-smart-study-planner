@@ -1465,35 +1465,155 @@ body.light-mode .theme-toggle:active .theme-toggle__thumb { transform: translate
 }
 
 /* ---- Update Toast ---- */
-.update-toast {
+/* ============================================================
+   UPDATE POPUP — glassmorphism, bottom-center, slide-up
+   ============================================================ */
+.update-popup {
   position: fixed;
-  bottom: 24px;
+  bottom: 28px;
   left: 50%;
-  transform: translateX(-50%) translateY(80px);
-  background: var(--bg-modal);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 12px 20px;
+  transform: translateX(-50%) translateY(calc(100% + 40px));
+  z-index: 9999;
+  width: min(480px, calc(100vw - 32px));
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity   0.35s ease;
+}
+
+/* Visible state — triggered by JS adding .visible */
+.update-popup.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.update-popup__inner {
   display: flex;
   align-items: center;
   gap: 14px;
-  z-index: 9999;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  font-size: 0.85rem;
+  padding: 16px 18px;
+  background: rgba(13, 15, 26, 0.82);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(0, 255, 178, 0.22);
+  border-radius: 18px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 0 40px rgba(0, 255, 178, 0.06);
+}
+
+body.light-mode .update-popup__inner {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(0, 168, 122, 0.30);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.14),
+    0 0 40px rgba(0, 168, 122, 0.08);
+}
+
+.update-popup__icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+  animation: rocketBounce 1.4s ease infinite;
+}
+@keyframes rocketBounce {
+  0%, 100% { transform: translateY(0);    }
+  45%       { transform: translateY(-5px); }
+  65%       { transform: translateY(-2px); }
+}
+
+.update-popup__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.update-popup__text strong {
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 700;
   color: var(--text-primary);
-  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
   white-space: nowrap;
 }
-.update-toast.visible { transform: translateX(-50%) translateY(0); }
-.update-toast button {
-  background: var(--accent-green);
+.update-popup__text span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* "Update Now" gradient button */
+.update-popup__btn {
+  flex-shrink: 0;
+  padding: 9px 18px;
+  background: linear-gradient(135deg, #00ffb2 0%, #00c8ff 100%);
   color: #000;
-  border: none;
-  border-radius: 8px;
-  padding: 6px 14px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
   font-weight: 700;
-  font-size: 0.8rem;
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
+  letter-spacing: 0.2px;
+  transition: opacity 0.2s, transform 0.18s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(0, 255, 178, 0.35);
+  white-space: nowrap;
+}
+.update-popup__btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(0, 255, 178, 0.5);
+}
+.update-popup__btn:active {
+  transform: scale(0.96);
+}
+
+/* Dismiss ✕ button */
+.update-popup__dismiss {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+.update-popup__dismiss:hover {
+  background: rgba(255, 77, 106, 0.15);
+  border-color: rgba(255, 77, 106, 0.35);
+  color: var(--accent-red);
+}
+
+body.light-mode .update-popup__dismiss {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+/* Mobile: stretch to near full-width, keep button readable */
+@media (max-width: 520px) {
+  .update-popup {
+    bottom: 18px;
+    width: calc(100vw - 24px);
+  }
+  .update-popup__inner {
+    padding: 14px 14px;
+    gap: 10px;
+    border-radius: 14px;
+  }
+  .update-popup__icon { font-size: 1.3rem; }
+  .update-popup__text strong { font-size: 0.85rem; }
+  .update-popup__btn { padding: 8px 14px; font-size: 0.78rem; }
 }
 
 /* ---- Modal extra buttons (missing from original) ---- */
