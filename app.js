@@ -157,6 +157,7 @@ function weekStr() {
 // ============================================================
 // Holds reference to the waiting SW so we can message it on demand
 let _waitingSW = null;
+let _reloading = false; // guard against double-reload
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
@@ -199,9 +200,22 @@ function registerServiceWorker() {
       })
       .catch(err => console.warn('[StudyOS] SW registration failed:', err));
 
-    // When the SW sends RELOAD (after skipWaiting completes), refresh the page
+    // Listen for RELOAD broadcast from SW (sent after skipWaiting)
+    // This is more reliable than controllerchange alone on desktop Chrome/Edge
+    navigator.serviceWorker.addEventListener('message', event => {
+      if (event.data && event.data.type === 'RELOAD' && !_reloading) {
+        _reloading = true;
+        window.location.reload();
+      }
+    });
+
+    // controllerchange fires when a new SW takes control.
+    // Guard with _reloading so the RELOAD message above doesn't double-fire.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.location.reload();
+      if (!_reloading) {
+        _reloading = true;
+        window.location.reload();
+      }
     });
   });
 }
@@ -236,15 +250,28 @@ function applyUpdate() {
 let _deferredInstallPrompt = null;
 
 function initInstallPrompt() {
+  // beforeinstallprompt fires when Chrome/Edge decides the app is installable.
+  // On desktop, after uninstalling, Chrome re-evaluates installability on the
+  // next page load and WILL re-fire this event — BUT only if:
+  //   (a) The app is not already installed (display-mode: standalone check passes)
+  //   (b) The manifest ID is stable (we set "id": "/" in manifest.json)
+  //   (c) The manifest is not served stale from SW cache (fixed in sw.js)
+  // The original bug: localStorage 'studyos_install_dismissed' was set on first
+  // dismiss and NEVER cleared on uninstall, so the banner stayed hidden forever
+  // on desktop even after a fresh uninstall. Mobile worked because Android Chrome
+  // re-prompts independently of this flag via its own ambient badge.
+  // FIX: Clear the dismissed flag whenever beforeinstallprompt fires again,
+  //      because if Chrome is firing it, the app is genuinely installable again.
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     _deferredInstallPrompt = e;
 
-    const dismissed = localStorage.getItem('studyos_install_dismissed');
-    if (!dismissed) {
-      const banner = $('installBanner');
-      if (banner) banner.style.display = 'flex';
-    }
+    // Clear any stale dismissed flag — if Chrome is re-firing this event
+    // the user has uninstalled or never installed, so we should show again.
+    localStorage.removeItem('studyos_install_dismissed');
+
+    const banner = $('installBanner');
+    if (banner) banner.style.display = 'flex';
   });
 
   const installBtn = $('installBtn');
@@ -263,17 +290,26 @@ function initInstallPrompt() {
   if (dismissBtn) {
     dismissBtn.addEventListener('click', () => {
       $('installBanner').style.display = 'none';
+      // Only set dismissed if user explicitly clicked X
       localStorage.setItem('studyos_install_dismissed', '1');
     });
   }
 
-  // Hide banner once installed
+  // Hide banner once installed and clear dismissed flag (fresh install state)
   window.addEventListener('appinstalled', () => {
     const banner = $('installBanner');
     if (banner) banner.style.display = 'none';
     _deferredInstallPrompt = null;
+    localStorage.removeItem('studyos_install_dismissed');
     console.log('[StudyOS] App installed!');
   });
+
+  // Also detect if already running in standalone mode (installed PWA)
+  // and hide the banner if so
+  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    const banner = $('installBanner');
+    if (banner) banner.style.display = 'none';
+  }
 }
 
 // ============================================================
@@ -299,8 +335,9 @@ function initNetworkStatus() {
 function handleURLShortcuts() {
   const params = new URLSearchParams(location.search);
   if (params.get('action') === 'add') {
-    // Remove the query param without reloading
-    history.replaceState({}, '', '/');
+    // Use relative path (not '/') so this works on GitHub Pages subdirectories
+    // e.g. https://user.github.io/repo-name/ stays correct
+    history.replaceState({}, '', location.pathname);
     // Open the add-task modal after the app has initialised
     setTimeout(() => openModal('addTaskModal'), 400);
   }

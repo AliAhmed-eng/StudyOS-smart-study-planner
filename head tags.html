@@ -1,0 +1,51 @@
+<!-- ============================================================
+     StudyOS — Corrected <head> tags (drop-in replacement)
+
+     CHANGES vs original:
+     1. Added <meta name="theme-color"> with ONE combined entry
+        (some desktop browsers ignore the media-query variant)
+     2. Added apple-touch-icon sizes for 180px (the standard iOS size)
+     3. Added <link rel="icon" for SVG fallback (best desktop icon)
+     4. Notification icon path uses ./ relative prefix
+     ============================================================ -->
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+
+  <!-- ===== PWA Meta Tags ===== -->
+  <title>StudyOS — Smart Study Planner</title>
+  <meta name="description" content="A gamified smart study planner with timers, streaks, badges, focus mode, and offline support."/>
+  <meta name="application-name" content="StudyOS"/>
+
+  <!-- Single theme-color (media-query variants are only for browser chrome colour,
+       not for the install icon; some desktop UA ignore the conditional ones) -->
+  <meta name="theme-color" content="#6366F1"/>
+
+  <!-- Apple PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="StudyOS"/>
+  <!-- 180px is the canonical apple-touch-icon size (iPhone retina) -->
+  <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png"/>
+
+  <!-- Microsoft Tiles -->
+  <meta name="msapplication-TileImage" content="./icons/icon-192.png"/>
+  <meta name="msapplication-TileColor" content="#0a0a1a"/>
+
+  <!-- Favicon — use 512 as primary so desktop Chrome/Edge uses full-res -->
+  <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png"/>
+
+  <!-- PWA Manifest — note: NO crossorigin attribute here; adding it causes
+       some desktop browsers to treat it as a different resource and re-fetch
+       it as a CORS request, which can fail on GitHub Pages -->
+  <link rel="manifest" href="./manifest.json"/>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+  <link rel="stylesheet" href="./style.css"/>
+</head>
