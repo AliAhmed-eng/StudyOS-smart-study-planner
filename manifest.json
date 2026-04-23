@@ -1,6 +1,7 @@
 {
-  "name": "StudyOS \u2014 Smart Study Planner",
+  "name": "StudyOS — Smart Study Planner",
   "short_name": "StudyOS",
+  "id": "/",
   "description": "A gamified smart study planner with timers, streaks, badges, and offline support.",
   "start_url": "./",
   "scope": "./",

@@ -275,36 +275,51 @@ function applyUpdate() {
 // ============================================================
 let _deferredInstallPrompt = null;
 
+// --- FIX: Install Prompt Control ---
+// --- FIX: Duplicate Prompt Prevention ---
 function initInstallPrompt() {
-  // --- FIX: PWA Install Detection ---
-  // beforeinstallprompt fires when Chrome/Edge decides the app is installable.
-  // Guards applied in order:
-  //   1. isAppInstalled()         → already running as standalone PWA → skip
-  //   2. hideInstallPopup = true  → user explicitly dismissed → respect it
-  // The manifest has no "id" field so the browser derives identity from
-  // start_url ("./"), which resolves correctly on any deployment path
-  // including GitHub Pages subdirectories — preventing duplicate installs.
+  // Guard at startup: if already running as installed PWA, hide banner and bail.
+  if (isAppInstalled()) {
+    console.log('[StudyOS] Install prompt blocked (already installed)');
+    const banner = $('installBanner');
+    if (banner) banner.style.display = 'none';
+    return; // early return: don't wire up event listeners at all
+  }
+
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
 
-    // If app is already running as an installed PWA (standalone), silently
-    // ignore this event — no banner, no prompt. This prevents the install
-    // UI from appearing inside an already-installed instance.
-    if (isAppInstalled()) return;
+    // Double-check at event time — matchMedia state can change between
+    // page-load and the async beforeinstallprompt fire on slow networks.
+    if (isAppInstalled()) {
+      console.log('[StudyOS] Install prompt blocked (already installed)');
+      return;
+    }
 
-    // If user previously dismissed with "don't show again", respect that.
-    // We do NOT clear this flag here — only a real uninstall should reset it.
-    if (localStorage.getItem('hideInstallPopup') === 'true') return;
+    // Respect permanent dismissal — read BOTH keys so old sessions are honoured.
+    const dismissed = (
+      localStorage.getItem('installPromptDismissed') === 'true' ||
+      localStorage.getItem('hideInstallPopup')        === 'true'
+    );
+    if (dismissed) {
+      console.log('[StudyOS] Install prompt blocked (user dismissed)');
+      return;
+    }
 
+    // All clear — store the event and show the banner.
     _deferredInstallPrompt = e;
-    // Remove legacy key from older versions so they don't conflict
+
+    // Remove legacy keys from older app versions to avoid stale conflicts
     localStorage.removeItem('studyos_install_dismissed');
 
     const banner = $('installBanner');
-    if (banner) banner.style.display = 'flex';
+    if (banner) {
+      banner.style.display = 'flex';
+      console.log('[StudyOS] Install event triggered — banner shown');
+    }
   });
-  // --- FIX: PWA Install Detection End ---
 
+  // ── Install button ─────────────────────────────────────────────────────────
   const installBtn = $('installBtn');
   if (installBtn) {
     installBtn.addEventListener('click', async () => {
@@ -317,41 +332,43 @@ function initInstallPrompt() {
     });
   }
 
-  // --- FIX: Duplicate Install Prevention ---
+  // ── Dismiss button ("Later" / "×") ─────────────────────────────────────────────────────
   const dismissBtn = $('installDismiss');
   if (dismissBtn) {
     dismissBtn.addEventListener('click', () => {
-      $('installBanner').style.display = 'none';
-      // Use unified key so all install-prompt guards read the same flag
-      localStorage.setItem('hideInstallPopup', 'true');
+      const banner = $('installBanner');
+      if (banner) banner.style.display = 'none';
+      _deferredInstallPrompt = null;
+
+      // Write both keys: canonical for new code, legacy for iOS popup guard.
+      localStorage.setItem('installPromptDismissed', 'true');
+      localStorage.setItem('hideInstallPopup',        'true');
+
+      console.log('[StudyOS] Install dismissed by user — will not show again');
     });
   }
-  // --- FIX: Duplicate Install Prevention End ---
 
-  // Hide banner once installed.
-  // Clear ALL install-dismissal flags so if the user ever uninstalls and
-  // revisits in the browser, the prompt can appear again cleanly.
+  // ── appinstalled — fires after user confirms install ────────────────────────────────
+  // --- FIX: appinstalled Handler ---
   window.addEventListener('appinstalled', () => {
     const banner = $('installBanner');
     if (banner) banner.style.display = 'none';
     _deferredInstallPrompt = null;
-    // --- FIX: Duplicate Install Prevention ---
-    localStorage.removeItem('hideInstallPopup');           // unified key
-    localStorage.removeItem('studyos_install_dismissed'); // legacy key
-    localStorage.removeItem('studyos_ios_install_dismissed'); // iOS key
-    sessionStorage.removeItem('studyos_ios_install_session_seen');
-    // --- FIX: Duplicate Install Prevention End ---
-    console.log('[StudyOS] App installed ✓');
-  });
 
-  // --- FIX: Duplicate Install Prevention ---
-  // Hide banner immediately if already running as installed PWA
-  if (isAppInstalled()) {
-    const banner = $('installBanner');
-    if (banner) banner.style.display = 'none';
-  }
-  // --- FIX: Duplicate Install Prevention End ---
+    // Clear ALL dismissal flags so if the user ever uninstalls and revisits
+    // in the browser, the prompt can appear again cleanly.
+    localStorage.removeItem('installPromptDismissed');
+    localStorage.removeItem('hideInstallPopup');
+    localStorage.removeItem('studyos_install_dismissed');
+    localStorage.removeItem('studyos_ios_install_dismissed');
+    sessionStorage.removeItem('studyos_ios_install_session_seen');
+
+    console.log('[StudyOS] PWA already installed detected — appinstalled event fired ✓');
+  });
+  // --- FIX: appinstalled Handler End ---
 }
+// --- FIX: Install Prompt Control End ---
+// --- FIX: Duplicate Prompt Prevention End ---
 
 // ============================================================
 // 7. ONLINE / OFFLINE DETECTION
@@ -1676,20 +1693,31 @@ function isRunningStandalone() {
   );
 }
 
-// --- FIX: PWA Install Detection ---
+// --- FIX: Installed Detection ---
 /**
  * Unified installed-PWA check used by BOTH the Android banner and iOS popup.
- * Returns true if the app is running in standalone mode (already installed)
- * OR if the user has permanently dismissed the install prompt.
+ * Covers all display modes that indicate the app is running installed:
+ *   - standalone   : standard PWA install (Android Chrome, Edge, desktop)
+ *   - fullscreen   : some Android OEM launchers and Samsung Internet
+ *   - minimal-ui   : used by some Chromium forks on Android
+ *   - navigator.standalone : iOS Safari installed PWA
  * @returns {boolean}
  */
 function isAppInstalled() {
-  return (
-    window.navigator.standalone === true ||
-    window.matchMedia('(display-mode: standalone)').matches
-  );
+  const standaloneIOS   = window.navigator.standalone === true;
+  const standaloneMedia = window.matchMedia('(display-mode: standalone)').matches;
+  const fullscreenMedia = window.matchMedia('(display-mode: fullscreen)').matches;
+  const minimalUiMedia  = window.matchMedia('(display-mode: minimal-ui)').matches;
+
+  const installed = standaloneIOS || standaloneMedia || fullscreenMedia || minimalUiMedia;
+
+  if (installed) {
+    console.log('[StudyOS] PWA already installed detected — running in standalone/fullscreen mode');
+  }
+
+  return installed;
 }
-// --- FIX: PWA Install Detection End ---
+// --- FIX: Installed Detection End ---
 
 /**
  * Show the iOS install popup overlay with a smooth fade+slide animation.
@@ -1741,19 +1769,27 @@ function hideIosInstallPopup(permanently) {
  *  4. Skip if user already saw it this session ("Got it")
  *  5. Otherwise, show popup after a 2.5-second delay
  */
+// --- FIX: Install Prompt Control (iOS) ---
 function initIosInstallPopup() {
-  // Guard: only for iOS
+  // Guard: only for iOS devices
   if (!isIosDevice()) return;
 
-  // Guard: already installed — no need to prompt (uses shared helper)
-  if (isAppInstalled()) return;
+  // Guard: already running as installed PWA
+  if (isAppInstalled()) {
+    console.log('[StudyOS] Install prompt blocked (already installed)');
+    return;
+  }
 
-  // Guard: user permanently dismissed — check BOTH keys for backward compat
-  // (old key: 'studyos_ios_install_dismissed', new unified key: 'hideInstallPopup')
-  if (
-    localStorage.getItem('studyos_ios_install_dismissed') === 'permanent' ||
-    localStorage.getItem('hideInstallPopup') === 'true'
-  ) return;
+  // Guard: user permanently dismissed — check all three keys for compatibility
+  const permanentlyDismissed = (
+    localStorage.getItem('installPromptDismissed')        === 'true'      ||
+    localStorage.getItem('hideInstallPopup')               === 'true'      ||
+    localStorage.getItem('studyos_ios_install_dismissed') === 'permanent'
+  );
+  if (permanentlyDismissed) {
+    console.log('[StudyOS] Install prompt blocked (user dismissed)');
+    return;
+  }
 
   // Guard: user already saw it this browser session
   if (sessionStorage.getItem('studyos_ios_install_session_seen')) return;
@@ -1776,8 +1812,12 @@ function initIosInstallPopup() {
   }
 
   // Delay popup so the page finishes loading and feels natural
-  setTimeout(showIosInstallPopup, 2500);
+  setTimeout(() => {
+    showIosInstallPopup();
+    console.log('[StudyOS] Install event triggered — iOS popup shown');
+  }, 2500);
 }
+// --- FIX: Install Prompt Control (iOS) End ---
 
 // --- iOS Install Popup Code End ---
 
