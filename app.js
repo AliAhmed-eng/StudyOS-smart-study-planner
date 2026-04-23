@@ -133,6 +133,32 @@ function loadState() {
       }
     });
 
+    // --- DATE FIX: Storage Consistency (backfill legacy completed tasks) ---
+    // Tasks completed before this feature existed have status === 'completed'
+    // but no completedDate / completedDay. Reconstruct from the completedAt
+    // Unix timestamp (already saved) so old tasks show a date without any
+    // user action needed. Persisted by the saveState() at end of loadState.
+    let backfillNeeded = false;
+    STATE.tasks.forEach(t => {
+      if (t.status === 'completed' && !t.completedDate) {
+        try {
+          const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+          const padN = n => String(n).padStart(2, '0');
+          const d = t.completedAt ? new Date(t.completedAt) : new Date();
+          t.completedDate = `${d.getFullYear()}-${padN(d.getMonth() + 1)}-${padN(d.getDate())}`;
+          t.completedDay  = DAYS[d.getDay()] || '';
+          backfillNeeded  = true;
+          console.log('[StudyOS] Backfilled date for legacy task:', t.id, t.completedDate, t.completedDay);
+        } catch (_) {
+          t.completedDate = '';
+          t.completedDay  = '';
+        }
+      }
+    });
+    // Persist backfilled dates so they survive subsequent page loads
+    if (backfillNeeded) saveState();
+    // --- DATE FIX: Storage Consistency End ---
+
   } catch (e) {
     console.warn('[StudyOS] Load failed:', e);
   }
@@ -250,19 +276,14 @@ function applyUpdate() {
 let _deferredInstallPrompt = null;
 
 function initInstallPrompt() {
-  // beforeinstallprompt fires when Chrome/Edge decides the app is installable.
-  // On desktop, after uninstalling, Chrome re-evaluates installability on the
-  // next page load and WILL re-fire this event — BUT only if:
-  //   (a) The app is not already installed (display-mode: standalone check passes)
-  //   (b) The manifest ID is stable (we set "id": "/" in manifest.json)
-  //   (c) The manifest is not served stale from SW cache (fixed in sw.js)
-  // The original bug: localStorage 'studyos_install_dismissed' was set on first
-  // dismiss and NEVER cleared on uninstall, so the banner stayed hidden forever
-  // on desktop even after a fresh uninstall. Mobile worked because Android Chrome
-  // re-prompts independently of this flag via its own ambient badge.
-  // FIX: Clear the dismissed flag whenever beforeinstallprompt fires again,
-  //      because if Chrome is firing it, the app is genuinely installable again.
   // --- FIX: PWA Install Detection ---
+  // beforeinstallprompt fires when Chrome/Edge decides the app is installable.
+  // Guards applied in order:
+  //   1. isAppInstalled()         → already running as standalone PWA → skip
+  //   2. hideInstallPopup = true  → user explicitly dismissed → respect it
+  // The manifest has no "id" field so the browser derives identity from
+  // start_url ("./"), which resolves correctly on any deployment path
+  // including GitHub Pages subdirectories — preventing duplicate installs.
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
 
@@ -307,13 +328,20 @@ function initInstallPrompt() {
   }
   // --- FIX: Duplicate Install Prevention End ---
 
-  // Hide banner once installed and clear dismissed flag (fresh install state)
+  // Hide banner once installed.
+  // Clear ALL install-dismissal flags so if the user ever uninstalls and
+  // revisits in the browser, the prompt can appear again cleanly.
   window.addEventListener('appinstalled', () => {
     const banner = $('installBanner');
     if (banner) banner.style.display = 'none';
     _deferredInstallPrompt = null;
-    localStorage.removeItem('studyos_install_dismissed');
-    console.log('[StudyOS] App installed!');
+    // --- FIX: Duplicate Install Prevention ---
+    localStorage.removeItem('hideInstallPopup');           // unified key
+    localStorage.removeItem('studyos_install_dismissed'); // legacy key
+    localStorage.removeItem('studyos_ios_install_dismissed'); // iOS key
+    sessionStorage.removeItem('studyos_ios_install_session_seen');
+    // --- FIX: Duplicate Install Prevention End ---
+    console.log('[StudyOS] App installed ✓');
   });
 
   // --- FIX: Duplicate Install Prevention ---
@@ -741,18 +769,25 @@ function getCompletionDateTime() {
 // --- Task Date Feature End ---
 
 function completeTask(task) {
-  if (task.status === 'completed') return;
+  // --- DATE FIX: Auto Add Missing Date ---
+  // Stamp date/day FIRST — before any guard — so it is always written
+  // even when status was pre-set externally. Idempotent: skips if already set.
+  if (!task.completedDate) {
+    const { completedDate, completedDay } = getCompletionDateTime();
+    task.completedDate = completedDate;
+    task.completedDay  = completedDay;
+    console.log('[StudyOS] Stamped completion date:', task.id, task.completedDate, task.completedDay);
+  }
+  // --- DATE FIX: Auto Add Missing Date End ---
+
+  // Guard: skip stat/counter updates if already fully processed.
+  // Checks completedAt (timestamp) not just status so tasks whose status
+  // was set externally still get counters incremented exactly once.
+  if (task.status === 'completed' && task.completedAt) return;
 
   task.status      = 'completed';
   task.completedAt = Date.now();
   task.timerFired  = true;
-
-  // --- Task Date Feature Start ---
-  // Stamp the completion date/day onto the task when it is first completed
-  const { completedDate, completedDay } = getCompletionDateTime();
-  task.completedDate = completedDate;
-  task.completedDay  = completedDay;
-  // --- Task Date Feature End ---
 
   const studiedMin = task.manualMode
     ? Math.round(task.elapsedMs / 60000)
@@ -765,7 +800,32 @@ function completeTask(task) {
   checkRewardUnlock();
   checkBadges();
   updateStreak();
+
+  // --- DATE FIX: Storage Consistency ---
+  // Save AFTER all mutations are done. STATE.tasks holds the same object
+  // reference as `task`, so completedDate, completedDay, status, and
+  // completedAt are all captured together in a single atomic write.
   saveState();
+
+  // Verify: confirm the task landed in localStorage with date fields intact
+  try {
+    const saved = JSON.parse(localStorage.getItem('studyos_state') || '{}');
+    const savedTask = (saved.tasks || []).find(t => t.id === task.id);
+    if (savedTask) {
+      console.log('[StudyOS] localStorage verified:', {
+        id:            savedTask.id,
+        status:        savedTask.status,
+        completedDate: savedTask.completedDate,
+        completedDay:  savedTask.completedDay,
+      });
+    } else {
+      console.warn('[StudyOS] Task NOT found in localStorage after save! id:', task.id);
+    }
+  } catch (e) {
+    console.warn('[StudyOS] Could not verify localStorage save:', e);
+  }
+  // --- DATE FIX: Storage Consistency End ---
+
   renderAll();
 }
 
@@ -990,33 +1050,59 @@ function buildTaskCard(task) {
     actionsHtml = `<button class="btn-task delete" onclick="deleteTask(${id})">🗑 Remove</button>`;
   }
 
+  // --- DATE FIX: Auto Add Missing Date ---
+  // Last-resort safety net: if a completed task somehow reached the renderer
+  // without completedDate/completedDay, generate them now from completedAt
+  // (or current time as a final fallback), mutate the task object in STATE,
+  // and persist to localStorage immediately so the gap is never seen again.
+  if (status === 'completed' && !task.completedDate) {
+    try {
+      const DAYS_FB = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const padFB   = n => String(n).padStart(2, '0');
+      const dFB     = task.completedAt ? new Date(task.completedAt) : new Date();
+      task.completedDate = `${dFB.getFullYear()}-${padFB(dFB.getMonth() + 1)}-${padFB(dFB.getDate())}`;
+      task.completedDay  = DAYS_FB[dFB.getDay()] || '';
+      // Persist immediately so this auto-fix survives page reload
+      // --- DATE FIX: Storage Consistency ---
+      saveState();
+      // --- DATE FIX: Storage Consistency End ---
+      console.log('[StudyOS] Auto-fixed missing date at render time:', task.id, task.completedDate, task.completedDay);
+    } catch (_) {
+      task.completedDate = task.completedDate || '';
+      task.completedDay  = task.completedDay  || '';
+    }
+  }
+  // --- DATE FIX: Auto Add Missing Date End ---
+
+  // --- DATE FIX: Safe Rendering ---
   let extraInfo = '';
+
   if (status === 'completed' && task.isEarlyComplete && task.earlyMinutes > 0) {
-    extraInfo = `<div class="task-early-info">⚡ Finished ${task.earlyMinutes}m early</div>`;
+    extraInfo += `<div class="task-early-info">⚡ Finished ${task.earlyMinutes}m early</div>`;
   }
   if (status === 'completed' && task.delayMinutes > 0) {
     const dm = task.delayMinutes;
     const ds = dm >= 60 ? `${Math.floor(dm / 60)}h ${dm % 60}m` : `${dm}m`;
-    extraInfo = `<div class="task-delay-info">⏱ Delayed by ${ds}</div>`;
+    extraInfo += `<div class="task-delay-info">⏱ Delayed by ${ds}</div>`;
   }
 
-  // --- FIX: Task Completion Date ---
-  // Show completion date/day on completed tasks.
-  // Guards: (1) must be completed, (2) completedDate must exist (backward compat),
-  // (3) completedDay falls back to empty string if missing (old tasks won't crash).
   if (status === 'completed' && task.completedDate) {
     try {
-      const [yr, mo, dy] = task.completedDate.split('-');
-      // Pad the day and month so format is always DD-MM-YYYY
-      const formattedDate = `${dy}-${mo}-${yr}`;
-      // completedDay may be absent on tasks saved before this feature was added
-      const dayLabel = task.completedDay ? `${task.completedDay}, ` : '';
-      extraInfo += `<div class="task-completed-date">📅 Completed on ${dayLabel}${formattedDate}</div>`;
+      const parts = task.completedDate.split('-');
+      if (parts.length === 3) {
+        const [yr, mo, dy] = parts;
+        const formattedDate = `${dy}/${mo}/${yr}`;
+        // completedDay may be absent on tasks saved before this feature — degrade gracefully
+        const dayLabel = (task.completedDay && typeof task.completedDay === 'string')
+          ? `${task.completedDay}, `
+          : '';
+        extraInfo += `<div class="task-completed-date">📅 Completed on ${dayLabel}${formattedDate}</div>`;
+      }
     } catch (_) {
-      // Silently skip malformed date — never crash the card render
+      // Malformed date string — skip silently, never crash the card render
     }
   }
-  // --- FIX: Task Completion Date End ---
+  // --- DATE FIX: Safe Rendering End ---
 
   const modeLabel = task.manualMode ? '<span class="manual-badge">Manual</span>' : '';
 
