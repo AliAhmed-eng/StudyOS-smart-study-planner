@@ -704,12 +704,35 @@ function markCompleteEarly(taskId) {
 // ============================================================
 // 19. COMPLETE TASK (shared logic)
 // ============================================================
+// --- Task Date Feature Start ---
+/**
+ * Returns { completedDate: "YYYY-MM-DD", completedDay: "Monday" } for now.
+ * Extracted as a helper so it can be reused if needed.
+ */
+function getCompletionDateTime() {
+  const now  = new Date();
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const pad  = n => String(n).padStart(2, '0');
+  return {
+    completedDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    completedDay:  DAYS[now.getDay()],
+  };
+}
+// --- Task Date Feature End ---
+
 function completeTask(task) {
   if (task.status === 'completed') return;
 
   task.status      = 'completed';
   task.completedAt = Date.now();
   task.timerFired  = true;
+
+  // --- Task Date Feature Start ---
+  // Stamp the completion date/day onto the task when it is first completed
+  const { completedDate, completedDay } = getCompletionDateTime();
+  task.completedDate = completedDate;
+  task.completedDay  = completedDay;
+  // --- Task Date Feature End ---
 
   const studiedMin = task.manualMode
     ? Math.round(task.elapsedMs / 60000)
@@ -956,6 +979,17 @@ function buildTaskCard(task) {
     const ds = dm >= 60 ? `${Math.floor(dm / 60)}h ${dm % 60}m` : `${dm}m`;
     extraInfo = `<div class="task-delay-info">⏱ Delayed by ${ds}</div>`;
   }
+
+  // --- Task Date Feature Start ---
+  // Show completion date if present. Old tasks without this field are handled gracefully.
+  if (status === 'completed' && task.completedDate) {
+    // Format: "Thursday, 23 Apr 2026"
+    const [yr, mo, dy] = task.completedDate.split('-');
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const niceDate = `${task.completedDay}, ${parseInt(dy, 10)} ${MONTHS[parseInt(mo, 10) - 1]} ${yr}`;
+    extraInfo += `<div class="task-completed-date">📅 Completed on ${niceDate}</div>`;
+  }
+  // --- Task Date Feature End ---
 
   const modeLabel = task.manualMode ? '<span class="manual-badge">Manual</span>' : '';
 
@@ -1492,6 +1526,128 @@ window.startGame           = startGame;
 window.applyUpdate         = applyUpdate;
 window.dismissUpdatePopup  = dismissUpdatePopup;
 
+
+// ============================================================
+// 41b. iOS INSTALL GUIDE POPUP
+// --- iOS Install Popup Code Start ---
+// Safari on iOS does not fire beforeinstallprompt, so we show
+// a manual guide popup to instruct users how to use
+// "Add to Home Screen" via the browser's Share sheet.
+// ============================================================
+
+/**
+ * Detect if the current device is running iOS (iPhone / iPad).
+ * We check both the modern 'standalone' property (iPad on iOS 13+
+ * reports as "MacIntel" in some UA strings) and the classic UA check.
+ * @returns {boolean}
+ */
+function isIosDevice() {
+  const ua = window.navigator.userAgent;
+  const isIphone  = /iPhone/i.test(ua);
+  const isIpad    = /iPad/i.test(ua);
+  // iPad on iOS 13+ may report as "MacIntel" — detect via touch points
+  const isIpadNew = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+  return isIphone || isIpad || isIpadNew;
+}
+
+/**
+ * Detect if the app is already running as an installed PWA (standalone mode).
+ * On iOS this is window.navigator.standalone; on other platforms we use
+ * the CSS display-mode media query.
+ * @returns {boolean}
+ */
+function isRunningStandalone() {
+  return (
+    window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches
+  );
+}
+
+/**
+ * Show the iOS install popup overlay with a smooth fade+slide animation.
+ */
+function showIosInstallPopup() {
+  const overlay = document.getElementById('iosInstallOverlay');
+  if (!overlay) return;
+
+  overlay.style.display = 'flex';
+
+  // Trigger animation on next frame (avoids instant display: flex → opacity jump)
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      overlay.classList.add('ios-visible');
+    });
+  });
+}
+
+/**
+ * Hide the iOS install popup with a fade-out animation.
+ * @param {boolean} permanently - if true, saves preference to localStorage
+ */
+function hideIosInstallPopup(permanently) {
+  const overlay = document.getElementById('iosInstallOverlay');
+  if (!overlay) return;
+
+  overlay.classList.remove('ios-visible');
+
+  // Wait for CSS transition to finish before hiding from layout
+  overlay.addEventListener('transitionend', () => {
+    overlay.style.display = 'none';
+  }, { once: true });
+
+  if (permanently) {
+    // User explicitly chose "Don't show again"
+    localStorage.setItem('studyos_ios_install_dismissed', 'permanent');
+  } else {
+    // "Got it" — suppress for this session only (clear on next page load)
+    sessionStorage.setItem('studyos_ios_install_session_seen', '1');
+  }
+}
+
+/**
+ * Initialise the iOS install popup:
+ *  1. Skip on non-iOS devices (Android/desktop use beforeinstallprompt)
+ *  2. Skip if already running as installed PWA
+ *  3. Skip if user previously clicked "Don't show again"
+ *  4. Skip if user already saw it this session ("Got it")
+ *  5. Otherwise, show popup after a 2.5-second delay
+ */
+function initIosInstallPopup() {
+  // Guard: only for iOS
+  if (!isIosDevice()) return;
+
+  // Guard: already installed — no need to prompt
+  if (isRunningStandalone()) return;
+
+  // Guard: user permanently dismissed
+  if (localStorage.getItem('studyos_ios_install_dismissed') === 'permanent') return;
+
+  // Guard: user already saw it this browser session
+  if (sessionStorage.getItem('studyos_ios_install_session_seen')) return;
+
+  // Wire up button handlers BEFORE showing the popup
+  const closeBtn    = document.getElementById('iosInstallClose');
+  const gotItBtn    = document.getElementById('iosInstallGotIt');
+  const dontShowBtn = document.getElementById('iosInstallDontShow');
+
+  if (closeBtn)    closeBtn.addEventListener('click',    () => hideIosInstallPopup(false));
+  if (gotItBtn)    gotItBtn.addEventListener('click',    () => hideIosInstallPopup(false));
+  if (dontShowBtn) dontShowBtn.addEventListener('click', () => hideIosInstallPopup(true));
+
+  // Close when tapping the dark backdrop (outside the popup card)
+  const overlay = document.getElementById('iosInstallOverlay');
+  if (overlay) {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) hideIosInstallPopup(false);
+    });
+  }
+
+  // Delay popup so the page finishes loading and feels natural
+  setTimeout(showIosInstallPopup, 2500);
+}
+
+// --- iOS Install Popup Code End ---
+
 // ============================================================
 // 42. MAIN INIT
 // ============================================================
@@ -1499,6 +1655,7 @@ function init() {
   // PWA setup first
   registerServiceWorker();
   initInstallPrompt();
+  initIosInstallPopup();  // iOS Safari install guide
   initNetworkStatus();
   handleURLShortcuts();
 

@@ -368,6 +368,74 @@
   </div>
 </div>
 
+<!-- ===== iOS INSTALL GUIDE POPUP ===== -->
+<!-- This popup is shown only on iOS Safari to guide users through
+     the manual "Add to Home Screen" process (iOS has no auto-prompt) -->
+<div class="ios-install-overlay" id="iosInstallOverlay" aria-modal="true" role="dialog" aria-label="Install StudyOS" style="display:none">
+  <div class="ios-install-popup" id="iosInstallPopup">
+    <!-- Close button -->
+    <button class="ios-install-close" id="iosInstallClose" aria-label="Close">✕</button>
+
+    <!-- App icon + branding -->
+    <div class="ios-install-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="48" height="48" aria-hidden="true">
+        <defs>
+          <linearGradient id="iosLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"   stop-color="#6366F1"/>
+            <stop offset="50%"  stop-color="#22D3EE"/>
+            <stop offset="100%" stop-color="#A78BFA"/>
+          </linearGradient>
+        </defs>
+        <rect width="32" height="32" rx="7" fill="#0a0a1a"/>
+        <path d="M11.5 10.5 C11.5 8.5,13,7,16,7 C19,7,21,8.5,21,11 C21,13.5,19,14.5,16,15.5 C13,16.5,11,17.5,11,20 C11,22.5,13,24.5,16,24.5 C19,24.5,20.5,23,20.5,21"
+              fill="none" stroke="url(#iosLogoGrad)" stroke-width="2.8" stroke-linecap="round"/>
+        <circle cx="11.5" cy="10.5" r="1.5" fill="#22D3EE"/>
+        <circle cx="20.5" cy="21"   r="1.5" fill="#A78BFA"/>
+      </svg>
+    </div>
+
+    <h2 class="ios-install-title">Install StudyOS</h2>
+    <p class="ios-install-subtitle">Add to your Home Screen for the full app experience — works offline too.</p>
+
+    <!-- Step-by-step instructions -->
+    <ol class="ios-install-steps">
+      <li class="ios-install-step">
+        <span class="ios-step-num">1</span>
+        <span class="ios-step-text">
+          Tap the <strong>Share</strong> button
+          <span class="ios-share-icon" aria-label="Share icon">
+            <!-- iOS-style share icon (box with arrow up) -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+              <polyline points="16 6 12 2 8 6"/>
+              <line x1="12" y1="2" x2="12" y2="15"/>
+            </svg>
+          </span>
+          at the bottom of your browser
+        </span>
+      </li>
+      <li class="ios-install-step">
+        <span class="ios-step-num">2</span>
+        <span class="ios-step-text">Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+      </li>
+      <li class="ios-install-step">
+        <span class="ios-step-num">3</span>
+        <span class="ios-step-text">Tap <strong>"Add"</strong> in the top-right corner</span>
+      </li>
+    </ol>
+
+    <!-- Arrow pointing down toward the share button -->
+    <div class="ios-install-arrow" aria-hidden="true">↓</div>
+
+    <!-- Action buttons -->
+    <div class="ios-install-actions">
+      <button class="ios-install-got-it" id="iosInstallGotIt">Got it!</button>
+      <button class="ios-install-dismiss" id="iosInstallDontShow">Don't show again</button>
+    </div>
+  </div>
+</div>
+<!-- ===== END iOS INSTALL GUIDE POPUP ===== -->
+
 <script src="app.js"></script>
 </body>
 </html>
