@@ -1,6 +1,5 @@
 {
-  "id": "/",
-  "name": "StudyOS — Smart Study Planner",
+  "name": "StudyOS \u2014 Smart Study Planner",
   "short_name": "StudyOS",
   "description": "A gamified smart study planner with timers, streaks, badges, and offline support.",
   "start_url": "./",
@@ -10,7 +9,11 @@
   "theme_color": "#6366F1",
   "orientation": "portrait-primary",
   "lang": "en",
-  "categories": ["education", "productivity", "utilities"],
+  "categories": [
+    "education",
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "./icons/icon-192.png",
@@ -44,7 +47,12 @@
       "short_name": "Add",
       "description": "Quickly add a new study task",
       "url": "./?action=add",
-      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

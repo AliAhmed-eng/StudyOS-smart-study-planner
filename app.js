@@ -262,17 +262,27 @@ function initInstallPrompt() {
   // re-prompts independently of this flag via its own ambient badge.
   // FIX: Clear the dismissed flag whenever beforeinstallprompt fires again,
   //      because if Chrome is firing it, the app is genuinely installable again.
+  // --- FIX: PWA Install Detection ---
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
-    _deferredInstallPrompt = e;
 
-    // Clear any stale dismissed flag — if Chrome is re-firing this event
-    // the user has uninstalled or never installed, so we should show again.
+    // If app is already running as an installed PWA (standalone), silently
+    // ignore this event — no banner, no prompt. This prevents the install
+    // UI from appearing inside an already-installed instance.
+    if (isAppInstalled()) return;
+
+    // If user previously dismissed with "don't show again", respect that.
+    // We do NOT clear this flag here — only a real uninstall should reset it.
+    if (localStorage.getItem('hideInstallPopup') === 'true') return;
+
+    _deferredInstallPrompt = e;
+    // Remove legacy key from older versions so they don't conflict
     localStorage.removeItem('studyos_install_dismissed');
 
     const banner = $('installBanner');
     if (banner) banner.style.display = 'flex';
   });
+  // --- FIX: PWA Install Detection End ---
 
   const installBtn = $('installBtn');
   if (installBtn) {
@@ -286,14 +296,16 @@ function initInstallPrompt() {
     });
   }
 
+  // --- FIX: Duplicate Install Prevention ---
   const dismissBtn = $('installDismiss');
   if (dismissBtn) {
     dismissBtn.addEventListener('click', () => {
       $('installBanner').style.display = 'none';
-      // Only set dismissed if user explicitly clicked X
-      localStorage.setItem('studyos_install_dismissed', '1');
+      // Use unified key so all install-prompt guards read the same flag
+      localStorage.setItem('hideInstallPopup', 'true');
     });
   }
+  // --- FIX: Duplicate Install Prevention End ---
 
   // Hide banner once installed and clear dismissed flag (fresh install state)
   window.addEventListener('appinstalled', () => {
@@ -304,12 +316,13 @@ function initInstallPrompt() {
     console.log('[StudyOS] App installed!');
   });
 
-  // Also detect if already running in standalone mode (installed PWA)
-  // and hide the banner if so
-  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+  // --- FIX: Duplicate Install Prevention ---
+  // Hide banner immediately if already running as installed PWA
+  if (isAppInstalled()) {
     const banner = $('installBanner');
     if (banner) banner.style.display = 'none';
   }
+  // --- FIX: Duplicate Install Prevention End ---
 }
 
 // ============================================================
@@ -709,15 +722,22 @@ function markCompleteEarly(taskId) {
  * Returns { completedDate: "YYYY-MM-DD", completedDay: "Monday" } for now.
  * Extracted as a helper so it can be reused if needed.
  */
+// --- FIX: Task Completion Date ---
 function getCompletionDateTime() {
-  const now  = new Date();
-  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const pad  = n => String(n).padStart(2, '0');
-  return {
-    completedDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
-    completedDay:  DAYS[now.getDay()],
-  };
+  try {
+    const now  = new Date();
+    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const pad  = n => String(n).padStart(2, '0');
+    return {
+      completedDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+      completedDay:  DAYS[now.getDay()] || '',
+    };
+  } catch (_) {
+    // Fallback: if Date fails for any reason return safe empty values
+    return { completedDate: '', completedDay: '' };
+  }
 }
+// --- FIX: Task Completion Date End ---
 // --- Task Date Feature End ---
 
 function completeTask(task) {
@@ -980,16 +1000,23 @@ function buildTaskCard(task) {
     extraInfo = `<div class="task-delay-info">⏱ Delayed by ${ds}</div>`;
   }
 
-  // --- Task Date Feature Start ---
-  // Show completion date if present. Old tasks without this field are handled gracefully.
+  // --- FIX: Task Completion Date ---
+  // Show completion date/day on completed tasks.
+  // Guards: (1) must be completed, (2) completedDate must exist (backward compat),
+  // (3) completedDay falls back to empty string if missing (old tasks won't crash).
   if (status === 'completed' && task.completedDate) {
-    // Format: "Thursday, 23 Apr 2026"
-    const [yr, mo, dy] = task.completedDate.split('-');
-    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const niceDate = `${task.completedDay}, ${parseInt(dy, 10)} ${MONTHS[parseInt(mo, 10) - 1]} ${yr}`;
-    extraInfo += `<div class="task-completed-date">📅 Completed on ${niceDate}</div>`;
+    try {
+      const [yr, mo, dy] = task.completedDate.split('-');
+      // Pad the day and month so format is always DD-MM-YYYY
+      const formattedDate = `${dy}-${mo}-${yr}`;
+      // completedDay may be absent on tasks saved before this feature was added
+      const dayLabel = task.completedDay ? `${task.completedDay}, ` : '';
+      extraInfo += `<div class="task-completed-date">📅 Completed on ${dayLabel}${formattedDate}</div>`;
+    } catch (_) {
+      // Silently skip malformed date — never crash the card render
+    }
   }
-  // --- Task Date Feature End ---
+  // --- FIX: Task Completion Date End ---
 
   const modeLabel = task.manualMode ? '<span class="manual-badge">Manual</span>' : '';
 
@@ -1563,6 +1590,21 @@ function isRunningStandalone() {
   );
 }
 
+// --- FIX: PWA Install Detection ---
+/**
+ * Unified installed-PWA check used by BOTH the Android banner and iOS popup.
+ * Returns true if the app is running in standalone mode (already installed)
+ * OR if the user has permanently dismissed the install prompt.
+ * @returns {boolean}
+ */
+function isAppInstalled() {
+  return (
+    window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches
+  );
+}
+// --- FIX: PWA Install Detection End ---
+
 /**
  * Show the iOS install popup overlay with a smooth fade+slide animation.
  */
@@ -1596,7 +1638,8 @@ function hideIosInstallPopup(permanently) {
   }, { once: true });
 
   if (permanently) {
-    // User explicitly chose "Don't show again"
+    // Write both keys: new unified key for future checks, legacy key for backward compat
+    localStorage.setItem('hideInstallPopup', 'true');
     localStorage.setItem('studyos_ios_install_dismissed', 'permanent');
   } else {
     // "Got it" — suppress for this session only (clear on next page load)
@@ -1616,11 +1659,15 @@ function initIosInstallPopup() {
   // Guard: only for iOS
   if (!isIosDevice()) return;
 
-  // Guard: already installed — no need to prompt
-  if (isRunningStandalone()) return;
+  // Guard: already installed — no need to prompt (uses shared helper)
+  if (isAppInstalled()) return;
 
-  // Guard: user permanently dismissed
-  if (localStorage.getItem('studyos_ios_install_dismissed') === 'permanent') return;
+  // Guard: user permanently dismissed — check BOTH keys for backward compat
+  // (old key: 'studyos_ios_install_dismissed', new unified key: 'hideInstallPopup')
+  if (
+    localStorage.getItem('studyos_ios_install_dismissed') === 'permanent' ||
+    localStorage.getItem('hideInstallPopup') === 'true'
+  ) return;
 
   // Guard: user already saw it this browser session
   if (sessionStorage.getItem('studyos_ios_install_session_seen')) return;
