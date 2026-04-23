@@ -1817,6 +1817,167 @@ function initIosInstallPopup() {
     console.log('[StudyOS] Install event triggered — iOS popup shown');
   }, 2500);
 }
+// --- SMART INSTALL/OPEN SYSTEM START ---
+(function () {
+  'use strict';
+
+  // ── Constants ─────────────────────────────────────────────
+  const DISMISS_KEY   = 'sos_banner_dismissed';
+  const START_URL     = './';          // matches manifest start_url
+  const SHOW_DELAY_MS = 1800;          // wait for page to settle
+
+  // ── Detect display mode ───────────────────────────────────
+  function isStandalone() {
+    return (
+      window.navigator.standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches  ||
+      window.matchMedia('(display-mode: fullscreen)').matches  ||
+      window.matchMedia('(display-mode: minimal-ui)').matches  ||
+      document.referrer.includes('android-app://')
+    );
+  }
+
+  // ── Detect installed (without being standalone right now) ─
+  // The browser fires beforeinstallprompt ONLY when NOT installed.
+  // We track the outcome in sessionStorage to infer installed state.
+  function isKnownInstalled() {
+    return sessionStorage.getItem('sos_pwa_installed') === 'true';
+  }
+
+  // ── Banner helpers ────────────────────────────────────────
+  function getBanner()     { return document.getElementById('sosInstallBanner'); }
+  function getPrimaryBtn() { return document.getElementById('sosPrimaryBtn'); }
+  function getDismissBtn() { return document.getElementById('sosDismissBtn'); }
+
+  function showBanner(mode) {
+    // mode: 'install' | 'open'
+    const banner = getBanner();
+    const btn    = getPrimaryBtn();
+    if (!banner || !btn) return;
+
+    const icon  = document.getElementById('sosBannerIcon');
+    const title = document.getElementById('sosBannerTitle');
+    const sub   = document.getElementById('sosBannerSub');
+
+    if (mode === 'install') {
+      if (icon)  icon.textContent  = '⬇';
+      if (title) title.textContent = 'Add StudyOS to your home screen';
+      if (sub)   sub.textContent   = 'Install for offline access & best experience';
+      btn.textContent = 'Install App';
+      btn.className   = 'sos-install';
+    } else {
+      if (icon)  icon.textContent  = '↗';
+      if (title) title.textContent = 'StudyOS is installed';
+      if (sub)   sub.textContent   = 'Switch to the app for the best experience';
+      btn.textContent = 'Open in App';
+      btn.className   = 'sos-open';
+    }
+
+    banner.style.display = 'flex';
+    console.log('[SOS] Banner shown — mode:', mode);
+  }
+
+  function hideBanner() {
+    const banner = getBanner();
+    if (banner) banner.style.display = 'none';
+  }
+
+  // ── Open in App ───────────────────────────────────────────
+  // Redirect to start_url; on Android this reopens the installed PWA.
+  // On desktop Chrome it focuses the standalone window if open.
+  function openInApp() {
+    console.log('[SOS] Opening installed app…');
+    window.location.href = START_URL;
+  }
+
+  // ── Main init ─────────────────────────────────────────────
+  window.initSmartInstallSystem = function () {
+
+    // Case 3: already running as PWA → show nothing, done.
+    if (isStandalone()) {
+      console.log('[SOS] Running in standalone — no banner');
+      return;
+    }
+
+    // Respect permanent dismissal (user clicked ×)
+    if (localStorage.getItem(DISMISS_KEY) === 'true') {
+      console.log('[SOS] Banner permanently dismissed');
+      return;
+    }
+
+    let _deferredPrompt = null;
+
+    // Wire dismiss button (works for both modes)
+    const dismissBtn = getDismissBtn();
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        hideBanner();
+        localStorage.setItem(DISMISS_KEY, 'true');
+        console.log('[SOS] Dismissed permanently');
+      });
+    }
+
+    // ── beforeinstallprompt fires → app is NOT installed ────
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      _deferredPrompt = e;
+
+      // Clear any stale "installed" flag
+      sessionStorage.removeItem('sos_pwa_installed');
+
+      setTimeout(() => {
+        // Re-check standalone at prompt time (edge case: opened from icon
+        // and browser still fires the event on some Android versions)
+        if (isStandalone()) return;
+        if (localStorage.getItem(DISMISS_KEY) === 'true') return;
+
+        // Case 1: not installed → show Install button
+        const btn = getPrimaryBtn();
+        if (btn) {
+          btn.onclick = async () => {
+            if (!_deferredPrompt) return;
+            hideBanner();
+            _deferredPrompt.prompt();
+            const { outcome } = await _deferredPrompt.userChoice;
+            console.log('[SOS] A2HS outcome:', outcome);
+            _deferredPrompt = null;
+            if (outcome === 'accepted') {
+              sessionStorage.setItem('sos_pwa_installed', 'true');
+            }
+          };
+        }
+        showBanner('install');
+      }, SHOW_DELAY_MS);
+    });
+
+    // ── appinstalled fires → clean up flags ─────────────────
+    window.addEventListener('appinstalled', () => {
+      hideBanner();
+      _deferredPrompt = null;
+      sessionStorage.setItem('sos_pwa_installed', 'true');
+      // Allow re-prompt if user ever uninstalls
+      localStorage.removeItem(DISMISS_KEY);
+      console.log('[SOS] App installed successfully');
+    });
+
+    // ── No beforeinstallprompt after delay → app IS installed
+    // (browser suppresses the event when the PWA is already installed)
+    setTimeout(() => {
+      if (_deferredPrompt !== null) return;       // prompt arrived; handled above
+      if (isStandalone()) return;                  // already standalone; handled
+      if (localStorage.getItem(DISMISS_KEY) === 'true') return;
+
+      // Case 2: installed but opened in browser → show Open in App
+      const btn = getPrimaryBtn();
+      if (btn) {
+        btn.onclick = openInApp;
+      }
+      showBanner('open');
+    }, SHOW_DELAY_MS + 200);   // slightly after the install-banner delay
+  };
+
+})();
+// --- SMART INSTALL/OPEN SYSTEM END ---
 // --- FIX: Install Prompt Control (iOS) End ---
 
 // --- iOS Install Popup Code End ---
@@ -1830,6 +1991,8 @@ function init() {
   initInstallPrompt();
   initIosInstallPopup();  // iOS Safari install guide
   initNetworkStatus();
+
+initSmartInstallSystem();
   handleURLShortcuts();
 
   // App state
